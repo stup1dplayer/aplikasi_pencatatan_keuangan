@@ -1,68 +1,124 @@
 import 'package:flutter/material.dart';
-import '../pages/main_screen.dart';
-import '../pages/report_screen.dart';
-import '../pages/history_screen.dart';
-import '../pages/settings_screen.dart';
-import '../pages/wishlist_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+
+// Import semua halaman yang dibutuhkan untuk navigasi
+import '../providers/settings_provider.dart';
 import '../providers/transaction_provider.dart';
+import '../pages/wishlist_screen.dart';
+import '../pages/history_screen.dart';   // <-- Pastikan import ini ada
+import '../pages/report_screen.dart';    // <-- Pastikan import ini ada
+import '../pages/settings_screen.dart';  // <-- Pastikan import ini ada
+import '../../domain/entities/transaction_entity.dart'; // <-- TAMBAHKAN BARIS INI
 
 class CustomDrawer extends StatelessWidget {
   const CustomDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<TransactionProvider>();
-    final currencyFormatter = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
-    final cleanAssetStr = currencyFormatter.format(provider.netIncome);
+    final settingsProvider = Provider.of<SettingsProvider>(context);
+    final currencyFormat = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
 
     return Drawer(
-      child: Column(
+      child: ListView(
+        padding: EdgeInsets.zero,
         children: [
-          UserAccountsDrawerHeader(
-            accountName: const Text('afkar', style: TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: Text('Aset Bersih: $cleanAssetStr'),
-            currentAccountPicture: const CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.person, size: 40, color: Colors.blue),
+          DrawerHeader(
+            decoration: const BoxDecoration(color: Colors.blue),
+            child: Consumer<TransactionProvider>(
+              builder: (context, txProvider, child) {
+                // Hitung Aset Bersih
+                double totalAset = 0;
+                final allTx = txProvider.groupedTransactions.values.expand((l) => l);
+                for (var tx in allTx) {
+                  if (tx.type == TransactionType.income) totalAset += tx.amount;
+                  else totalAset -= tx.amount;
+                }
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircleAvatar(
+                      backgroundColor: Colors.white,
+                      radius: 30,
+                      child: Icon(Icons.person, size: 35, color: Colors.blue),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      settingsProvider.profileName,
+                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Aset Bersih: ${currencyFormat.format(totalAset)}',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
+
+          // 1. MENU BERANDA
           ListTile(
-            leading: const Icon(Icons.edit_note),
-            title: const Text('Catat Baru'),
+            leading: const Icon(Icons.home),
+            title: const Text('Beranda'),
             onTap: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const MainScreen()));
+              // Menghapus semua tumpukan halaman dan kembali ke MainScreen (Akar)
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
             },
           ),
+
+          // 2. MENU WISHLIST
           ListTile(
-            leading: const Icon(Icons.pie_chart),
-            title: const Text('Laporan Keuangan'),
-            onTap: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const ReportScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.list_alt),
-            title: const Text('Semua Catatan'),
-            onTap: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HistoryScreen()));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.star_rounded),
+            leading: const Icon(Icons.stars),
             title: const Text('Impianku (Wishlist)'),
             onTap: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const WishlistScreen()));
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const WishlistScreen()),
+              );
             },
           ),
-          const Spacer(),
-          const Divider(),
+
+          // 3. MENU SEMUA CATATAN (HISTORY) - Diperbarui ke MaterialPageRoute
+          ListTile(
+            leading: const Icon(Icons.history),
+            title: const Text('Semua Catatan'),
+            onTap: () {
+              Navigator.pop(context); // Tutup drawer
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HistoryScreen()),
+              );
+            },
+          ),
+
+          // 4. MENU LAPORAN - Diperbarui ke MaterialPageRoute
+          ListTile(
+            leading: const Icon(Icons.bar_chart),
+            title: const Text('Laporan'),
+            onTap: () {
+              Navigator.pop(context); // Tutup drawer
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ReportScreen()),
+              );
+            },
+          ),
+
+          // 5. MENU PENGATURAN - Diperbarui ke MaterialPageRoute
           ListTile(
             leading: const Icon(Icons.settings),
             title: const Text('Pengaturan'),
             onTap: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              Navigator.pop(context); // Tutup drawer
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
             },
           ),
         ],

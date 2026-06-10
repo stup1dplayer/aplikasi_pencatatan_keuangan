@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'presentation/providers/settings_provider.dart';
 
 // Data Layer
 import 'data/datasources/isar_datasource.dart';
@@ -35,6 +36,7 @@ void main() async {
         ChangeNotifierProvider(
           create: (_) => WishlistProvider(isarDataSource),
         ),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: const MyApp(),
     ),

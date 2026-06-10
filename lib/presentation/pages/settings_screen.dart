@@ -50,6 +50,15 @@ class SettingsScreen extends StatelessWidget {
           ),
           const Divider(),
 
+          ListTile(
+            leading: const Icon(Icons.person_outline, color: Colors.green),
+            title: const Text('Nama Profil Navigasi'),
+            subtitle: Text(settingsProvider.profileName),
+            trailing: const Icon(Icons.edit, size: 20),
+            onTap: () => _showNameDialog(context, settingsProvider),
+          ),
+          const Divider(),
+
           const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('Versi Aplikasi'),
@@ -92,6 +101,37 @@ class SettingsScreen extends StatelessWidget {
             onPressed: () {
               final limit = double.tryParse(controller.text) ?? 0;
               provider.setDailyLimit(limit);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+  }
+  void _showNameDialog(BuildContext context, SettingsProvider provider) {
+    final controller = TextEditingController(text: provider.profileName);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ubah Nama Profil'),
+        content: TextField(
+          controller: controller,
+          textCapitalization: TextCapitalization.words,
+          decoration: const InputDecoration(
+            labelText: 'Nama Pengguna',
+            hintText: 'Masukkan nama Anda',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal')
+          ),
+          ElevatedButton(
+            onPressed: () {
+              provider.setProfileName(controller.text.trim());
               Navigator.pop(ctx);
             },
             child: const Text('Simpan'),

@@ -40,11 +40,12 @@ class TransactionModel {
   // Create Model from Entity
   static TransactionModel fromEntity(TransactionEntity entity) {
     return TransactionModel()
+      ..id = entity.id ?? Isar.autoIncrement
       ..type = entity.type
       ..amount = entity.amount
       ..description = entity.description
       ..account = entity.account
       ..dateTime = entity.dateTime
-      ..tag = entity.tag; // 3. TAMBAHKAN KE MAPPING MODEL
+      ..tag = entity.tag;
   }
 }

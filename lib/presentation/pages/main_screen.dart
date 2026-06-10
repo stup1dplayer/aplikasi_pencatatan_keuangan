@@ -2,6 +2,7 @@ import 'package:aplikasi_pencatatan_harian/presentation/providers/settings_provi
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../utils/category_predictor.dart';
 import '../../domain/entities/transaction_entity.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/custom_drawer.dart';
@@ -24,6 +25,20 @@ class _MainScreenState extends State<MainScreen> {
 
   // Variabel untuk menampung pilihan tag pengeluaran
   TransactionTag _selectedTag = TransactionTag.none;
+  // Fungsi yang dipanggil setiap kali teks deskripsi berubah
+  void _onDescriptionChanged(String text) {
+    // Hanya menebak jika sedang mencatat pengeluaran
+    if (_selectedType == TransactionType.expense) {
+      final predictedTag = CategoryPredictor.predict(text);
+
+      // Jika AI menemukan kecocokan, ubah state bubble-nya
+      if (predictedTag != TransactionTag.none && _selectedTag != predictedTag) {
+        setState(() {
+          _selectedTag = predictedTag;
+        });
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -57,13 +72,16 @@ class _MainScreenState extends State<MainScreen> {
       await txProvider.addTransaction(entity);
 
       if (mounted) {
-        // --- LOGIKA CEK LIMIT HARIAN ---
+        // --- 1. LOGIKA CEK LIMIT HARIAN (Jika ada) ---
+        String warningMsg = '';
+        Color warningColor = Colors.green;
+        bool hasWarning = false;
+
         if (_selectedType == TransactionType.expense) {
           final settingsProv = Provider.of<SettingsProvider>(context, listen: false);
           final limit = settingsProv.dailyLimit;
 
           if (limit > 0) {
-            // Hitung total pengeluaran hari ini
             double todayExpense = 0;
             final now = DateTime.now();
             final allTx = txProvider.groupedTransactions.values.expand((l) => l);
@@ -77,61 +95,82 @@ class _MainScreenState extends State<MainScreen> {
               }
             }
 
-            // Kalkulasi persentase dan tentukan pesan peringatan
             double percentage = todayExpense / limit;
-            String warningMsg = '';
-            Color warningColor = Colors.green;
-
             if (percentage >= 1.0) {
               warningMsg = '🚨 AWAS: Batas pengeluaran harianmu HABIS (Sisa 0%)!';
               warningColor = Colors.red;
+              hasWarning = true;
             } else if (percentage >= 0.95) {
               warningMsg = '⚠️ PERINGATAN: Sisa batas pengeluaran tinggal 5%!';
               warningColor = Colors.deepOrange;
+              hasWarning = true;
             } else if (percentage >= 0.90) {
               warningMsg = '⚠️ HATI-HATI: Sisa batas pengeluaran tinggal 10%.';
               warningColor = Colors.orange;
+              hasWarning = true;
             } else if (percentage >= 0.75) {
               warningMsg = 'ℹ️ INFO: Sisa batas pengeluaran tinggal 25%.';
               warningColor = Colors.blue;
+              hasWarning = true;
             }
-
-            // Tampilkan Notifikasi Peringatan jika masuk zona limit
-            if (warningMsg.isNotEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(warningMsg, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                  backgroundColor: warningColor,
-                  duration: const Duration(seconds: 4),
-                ),
-              );
-            } else {
-              // Notifikasi sukses biasa jika masih aman
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Catatan berhasil disimpan')),
-              );
-            }
-          } else {
-            // Notifikasi sukses biasa jika fitur limit dimatikan
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Catatan berhasil disimpan')),
-            );
           }
-        } else {
-          // Notifikasi jika pemasukan
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Pemasukan berhasil disimpan')),
-          );
         }
-        // --- SELESAI LOGIKA CEK LIMIT ---
 
-        _amountController.clear();
+        // --- 2. POP UP BERHASIL DICATAT ---
+        showDialog(
+            context: context,
+            barrierDismissible: false, // User wajib klik OK untuk menutup
+            builder: (ctx) => AlertDialog(
+              title: Row(
+                children: [
+                  Icon(
+                      hasWarning ? Icons.warning_amber_rounded : Icons.check_circle,
+                      color: hasWarning ? warningColor : Colors.green,
+                      size: 28
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Berhasil'),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_selectedType == TransactionType.expense
+                      ? 'Catatan pengeluaran Anda berhasil disimpan!'
+                      : 'Catatan pemasukan Anda berhasil disimpan!'),
+                  if (hasWarning) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: warningColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        warningMsg,
+                        style: TextStyle(color: warningColor, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                  ]
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+        );
+
+            // --- 3. RESET SEMUA KOLOM DAN STATE ---
+            _amountController.clear();
         _descController.clear();
         setState(() {
-          _selectedTag = TransactionTag.none;
-          if (_selectedType == TransactionType.income) {
-            _descController.text = 'ojol';
-          }
+          _selectedType = TransactionType.expense; // Reset kembali ke default Pengeluaran
+          _selectedAccount = AccountType.cash;     // Reset ke Cash
+          _selectedTag = TransactionTag.none;       // Reset bubble kategori
         });
       }
     }
@@ -224,6 +263,7 @@ class _MainScreenState extends State<MainScreen> {
                   labelText: 'Deskripsi',
                   border: OutlineInputBorder(),
                 ),
+                onChanged: _onDescriptionChanged,
               ),
               const SizedBox(height: 16),
 

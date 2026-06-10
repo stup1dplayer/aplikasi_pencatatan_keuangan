@@ -7,7 +7,6 @@ import '../providers/transaction_provider.dart';
 import '../widgets/custom_drawer.dart';
 import '../theme.dart';
 
-// 1. Enum untuk jenis filter
 enum FilterType { all, income, expense }
 
 class HistoryScreen extends StatefulWidget {
@@ -18,7 +17,6 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  // 2. Status filter saat ini (Default: Tampilkan Semua)
   FilterType _currentFilter = FilterType.all;
 
   @override
@@ -28,7 +26,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         title: const Text('Semua Catatan'),
         centerTitle: true,
         actions: [
-          // 3. Tombol Filter menggunakan PopupMenuButton
           PopupMenuButton<FilterType>(
             icon: const Icon(Icons.filter_list),
             tooltip: 'Filter Transaksi',
@@ -59,7 +56,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
         builder: (context, provider, child) {
           final grouped = provider.groupedTransactions;
 
-          // 4. Logika Pemfilteran Data
           Map<String, List<TransactionEntity>> filteredGrouped = {};
 
           grouped.forEach((date, transactions) {
@@ -69,10 +65,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
               } else if (_currentFilter == FilterType.expense) {
                 return tx.type == TransactionType.expense;
               }
-              return true; // Jika FilterType.all
+              return true;
             }).toList();
 
-            // Hanya masukkan tanggal ke daftar jika ada transaksi setelah difilter
             if (filteredTxs.isNotEmpty) {
               filteredGrouped[date] = filteredTxs;
             }
@@ -126,7 +121,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             color: isIncome ? AppColors.incomeGreen : AppColors.expenseRed,
                           ),
                         ),
-                        // 5. Ubah aksi onLongPress memanggil Menu Opsi
                         onLongPress: () => _showOptionsDialog(context, tx, provider),
                       );
                     },
@@ -140,7 +134,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // --- FUNGSI MUNCULKAN MENU OPSI ---
   void _showOptionsDialog(BuildContext context, TransactionEntity tx, TransactionProvider provider) {
     showModalBottomSheet(
       context: context,
@@ -170,7 +163,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // --- FUNGSI KONFIRMASI HAPUS ---
   void _confirmDelete(BuildContext context, TransactionEntity tx, TransactionProvider provider) {
     showDialog(
       context: context,
@@ -192,7 +184,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
   }
 
-  // --- FUNGSI MUNCULKAN FORM EDIT ---
+  // --- FUNGSI FORM EDIT DENGAN FITUR GANTI TANGGAL & JAM ---
   void _showEditDialog(BuildContext context, TransactionEntity tx, TransactionProvider provider) {
     final amountController = TextEditingController(text: tx.amount.toInt().toString());
     final descController = TextEditingController(text: tx.description);
@@ -201,11 +193,47 @@ class _HistoryScreenState extends State<HistoryScreen> {
     AccountType selectedAccount = tx.account;
     TransactionTag selectedTag = tx.tag;
 
+    // 1. Variabel State untuk menyimpan tanggal lama/baru
+    DateTime selectedDateTime = tx.dateTime;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => StatefulBuilder(
           builder: (context, setModalState) {
+            final editDateFormat = DateFormat('dd MMM yyyy, HH:mm');
+
+            // 2. Fungsi untuk memicu pemilih Tanggal dilanjut Jam
+            Future<void> _pickDateTime() async {
+              final DateTime? pickedDate = await showDatePicker(
+                context: context,
+                initialDate: selectedDateTime,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2101),
+              );
+
+              if (pickedDate != null) {
+                if (!context.mounted) return;
+                final TimeOfDay? pickedTime = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(selectedDateTime),
+                );
+
+                if (pickedTime != null) {
+                  // Gabungkan hasil pick tanggal dan pick jam
+                  setModalState(() {
+                    selectedDateTime = DateTime(
+                      pickedDate.year,
+                      pickedDate.month,
+                      pickedDate.day,
+                      pickedTime.hour,
+                      pickedTime.minute,
+                    );
+                  });
+                }
+              }
+            }
+
             return Padding(
               padding: EdgeInsets.only(
                   bottom: MediaQuery.of(ctx).viewInsets.bottom,
@@ -247,7 +275,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   const SizedBox(height: 16),
 
                   // Pilihan Tagging (Hanya jika pengeluaran)
-                  if (selectedType == TransactionType.expense)
+                  if (selectedType == TransactionType.expense) ...[
                     DropdownButtonFormField<TransactionTag>(
                       value: selectedTag,
                       decoration: const InputDecoration(labelText: 'Kategori (Opsional)'),
@@ -261,7 +289,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         if (val != null) setModalState(() => selectedTag = val);
                       },
                     ),
+                    const SizedBox(height: 16),
+                  ],
 
+                  // 3. UI KOLOM TANGGAL YANG BISA DIKLIK (DIBUNGKUS INKWELL)
+                  InkWell(
+                    onTap: _pickDateTime,
+                    child: IgnorePointer(
+                      child: TextFormField(
+                        // Menggunakan controller lokal instan untuk mengikuti perubahan data state
+                        controller: TextEditingController(
+                          text: editDateFormat.format(selectedDateTime),
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Tanggal & Jam',
+                          border: OutlineInputBorder(),
+                          suffixIcon: Icon(Icons.calendar_today, size: 20),
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // Tombol Simpan Perubahan
@@ -273,15 +320,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     onPressed: () async {
                       final newAmount = double.tryParse(amountController.text) ?? 0;
                       if (newAmount > 0) {
-                        // Buat objek entitas baru dengan ID yang sama
+                        // 4. Masukkan 'selectedDateTime' ke dalam copyWith
                         final updatedEntity = tx.copyWith(
                           amount: newAmount,
                           description: descController.text,
                           account: selectedAccount,
                           tag: selectedType == TransactionType.expense ? selectedTag : TransactionTag.none,
+                          dateTime: selectedDateTime,
                         );
 
-                        // Isar put() otomatis melakukan update jika ID sudah ada
                         await provider.addTransaction(updatedEntity);
                         if (context.mounted) Navigator.pop(ctx);
                       }
